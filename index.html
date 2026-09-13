@@ -37,20 +37,38 @@ return'neutral'
 }function renderC(){
 let f=$('q').value.toLowerCase();
 
-/* V1.5 - chỉ thay cách hiển thị:
-   Nếu cùng tên nhân vật có trên nhiều PC, giữ bản ghi thuộc PC
-   có heartbeat mới nhất và ẩn bản ghi ở PC cũ. */
+/* V1.7 - chỉ thay cách hiển thị:
+   Nếu cùng tên nhân vật có trên nhiều PC:
+   ưu tiên PC còn heartbeat + nhân vật không Offline.
+   Chỉ khi cùng mức ưu tiên mới dùng updated_at làm tiêu chí phụ.
+   Không xóa/sửa dữ liệu Supabase. */
 let newest={};
+function duplicatePriority(x){
+let machineAlive=MO[x.machine_id]!==false;
+let status=String(x.status||'').normalize('NFC').toLowerCase().trim();
+let charActive=status!==''&&status!=='--'&&!status.includes('offline');
+/* Ưu tiên:
+   2 = PC còn heartbeat + nhân vật không Offline
+   1 = PC còn heartbeat nhưng nhân vật Offline/stale
+   0 = PC đã mất heartbeat
+*/
+return machineAlive&&charActive?2:(machineAlive?1:0);
+}
 C.forEach(x=>{
 let name=String(x.character_name||'').normalize('NFC').toLowerCase().trim();
 if(!name)return;
-let hb=MT[x.machine_id]||0;
-if(!newest[name]||hb>newest[name].hb)newest[name]={machine_id:x.machine_id,hb:hb};
+let priority=duplicatePriority(x);
+let updated=x.updated_at?new Date(x.updated_at).getTime():0;
+let cur=newest[name];
+if(!cur||priority>cur.priority||(priority===cur.priority&&updated>cur.updated)){
+newest[name]={machine_id:x.machine_id,priority:priority,updated:updated};
+}
 });
 let visible=C.filter(x=>{
 let name=String(x.character_name||'').normalize('NFC').toLowerCase().trim();
 if(!name)return true;
-return !newest[name]||newest[name].machine_id===x.machine_id;
+let winner=newest[name];
+return !winner||winner.machine_id===x.machine_id;
 });
 let a=visible.filter(x=>!f||(x.character_name||'').toLowerCase().includes(f)||(x.machine_id||'').toLowerCase().includes(f)||(MN[x.machine_id]||'').toLowerCase().includes(f));
 let prev='';
